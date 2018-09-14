@@ -27,9 +27,11 @@ cdef extern from "object.c":
 	ctypedef uint16_t ObjID
 	ctypedef struct Object:
 		pass
-	ObjID obj_new(uint16_t parent);
-	void obj_free(ObjID obj);
-	int obj_add_child(ObjID self, ObjID child);
+		
+	ObjID obj_new(uint16_t parent)
+	void obj_free(ObjID obj)
+	void obj_reset()
+	int obj_add_child(ObjID self, ObjID child)
 
 cdef extern from "dom.c":
 	ctypedef struct Query:
@@ -39,7 +41,8 @@ cdef extern from "dom.c":
 		Set set
 		int nsty
 		int *styles
-	
+		
+	void dom_reset()
 	void dom_query_new_type(int type)
 	void dom_query_add_obj(int qid, ObjID obj)
 	void dom_query_dump()

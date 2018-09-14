@@ -16,6 +16,8 @@ struct s_Object {
 };
 
 ObjID obj_new(uint16_t parent);
+void obj_reset(void);
+
 void obj_free(ObjID obj);
 int obj_add_child(ObjID self, ObjID child);
 ObjID obj_parent(ObjID self);
@@ -42,6 +44,16 @@ ObjID obj_new(uint16_t parent)
 	g_objs[obj_num]->parent = parent;
 	g_objs[obj_num]->nchild = 0;
 	return obj_num;
+}
+
+void obj_reset(void)
+{
+	for (int o =1; o <= obj_num; ++o) {
+		free(g_objs[o]);
+	}
+	free(g_objs);
+	g_objs = 0;
+	obj_num = 0;
 }
 
 void obj_free(ObjID obj)

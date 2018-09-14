@@ -2,7 +2,7 @@
 # distutils: include_dirs = pyweb
 
 cimport compiler_c as cc
-import re, json
+import re, json, os.path
 from html import EL
 
 cdef void callback(int objid, void *f):
@@ -20,7 +20,7 @@ class Compiler:
 	def __init__(self):
 		self.tags = []
 		self.tagset = []
-		
+		cc.dom_reset()
 
 	def stype(self, qid):
 		q = cc.dom_get_query(qid)
@@ -265,18 +265,26 @@ class Compiler:
 		return jsdata
 		
 		
-	def js_compile(self, outdir=""):
+	def js_compile(self, outdir):
 		jsdata = self.js_build()
 		if outdir:
 			for f in jsdata[:-1]:
-				filename = outdir+'/'+f[0].split(':')[1]
+				filename = os.path.join(outdir, f[0].split(':')[1])
 				print("Writing %s..."%filename)
 				with open(filename, 'w') as fout:
 					fout.write(f[1])
 			return '<script type="module">' + jsdata[-1][1] + '</script>'
 		return ""
-			
 	
+	def get_py_deps(self):
+		return self.modules
+		deps = []
+		for m in self.modules:
+			if m._jsfile == 'pyweb__html.js':
+				continue
+			deps.append(m.__file__)
+		return deps
+		
 	def dump(self):
 		print("%d objs"%len(self.objects))
 		print("%d styles"%len(self.styles))

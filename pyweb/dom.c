@@ -29,6 +29,7 @@ struct s_Style {
 };
 
 
+void dom_reset(void);
 void dom_query_new_type(int type);
 void dom_query_add_obj(int qid, ObjID obj);
 
@@ -87,6 +88,28 @@ void dom_style_new()
 	g_sty[g_nsty].nq = 0;
 	g_sty[g_nsty].q = 0;
 }
+
+void dom_reset(void)
+{
+	for (int q=1; q <= g_nq; ++q) {
+		free(g_q[q].set);
+		free(g_q[q].styles);
+	}		
+	g_nq = 0;
+	free(g_q);
+	g_q = 0;
+	
+	for (int s = 1; s <= g_nsty; ++s) {
+		free(g_sty[s].set);
+		if (g_sty[s].q) free(g_sty[s].q);
+	}
+	g_nsty = 0;
+	free(g_sty);
+	g_sty = 0;
+	obj_reset();
+	
+}
+
 
 void dom_style_add_obj(int styid, ObjID obj)
 {
@@ -210,11 +233,15 @@ int style_get_cover(int sid, int qid)
 int dom_query_new_class(Set set)
 {
 	int clsid = ++g_nq;
+	
 	g_q = realloc(g_q, sizeof(Query)*(g_nq+1));
 	g_q[g_nq].set = set_new();
 	set_copy(g_q[g_nq].set, set);
 	g_q[g_nq].a = g_q[g_nq].b = 0;
 	g_q[g_nq].type = Q_CLS;
+	g_q[g_nq].nsty = 0;
+	g_q[g_nq].styles = 0;
+	
 	int max = g_nq;
 	for (int i = 1; i <= max; ++i) {
 		if (g_q[i].type == Q_TAG || g_q[i].type==Q_CLS)

@@ -21,6 +21,8 @@ class MetaElement(type):
 		if not hasattr(cls._mod, '_extra'):
 			cls._mod._extra = parse_doc(cls._mod)
 			cls._mod._jsfile = re.sub('/','__',cls._mod.__file__[cls._mod.__file__.rfind('/src/')+5:-3]) +'.js'
+			if cls._mod._jsfile.endswith('pyweb__html.js'):
+				cls._mod._jsfile = 'pyweb__html.js'
 
 	def __call__(cls, *args, **kwargs):
 		global g_element_stack
