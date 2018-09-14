@@ -1,4 +1,4 @@
-import importlib,  traceback, os, os.path, json, subprocess, re,sys,glob, yaml
+import importlib,  traceback, os, os.path, json, subprocess, re,sys,glob, yaml, shutil
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -11,6 +11,7 @@ from .build import build_all, build
 
 class Watchdog(FileSystemEventHandler):
 	def on_modified(self, event):
+		outdir = os.path.abspath(os.path.join('.', Handler.config['out']))
 		affected_pages = []
 		affected_module = None
 		for page, deps in Handler.deps.items():
@@ -18,12 +19,28 @@ class Watchdog(FileSystemEventHandler):
 				if d.__file__ == event.src_path:
 					affected_module = d
 					affected_pages.append(page)
+		
+		if affected_pages:
+			importlib.invalidate_caches()
+			importlib.reload(affected_module)
+			Handler.deps.update(build(affected_pages, outdir))
+			
+		elif event.src_path == './pyweb_config.yaml':
+			subprocess.call("pyweb-build", shell=True)
+			
+		else:
+			changed = os.path.abspath(event.src_path)
+			for xtra in Handler.config['extra']:
+				xtra = os.path.abspath(xtra)
+				if changed.startswith(xtra):
+					cpyfrom = changed[xtra.rfind('/')+1:]
+					cpyto = outdir
+					print("Copy %s -> %s"%(cpyfrom, cpyto))
+					shutil.copy2(cpyfrom, cpyto)
+					break
 				
-		if not affected_pages:
-			return
-		importlib.invalidate_caches()
-		importlib.reload(affected_module)
-		build(affected_pages, os.path.join('.', Handler.config['out']))
+			#~ changed = os.path.abspath(event.src_path)
+			#~ print(changed)
 		#~ for page in affected_pages:
 			#~ os.remove(os.)
 			
@@ -69,7 +86,11 @@ def serve():
 	print("Serving at http://%s:%s..."%(host, port))
 	observer = Observer()
 	event_handler = Watchdog()
-	observer.schedule(event_handler, "./src/")
+	observer.schedule(event_handler, "./", recursive=True)
+	#~ watches = set(['./src/'])
+	#~ for watch in  Handler.config['extra']:
+		#~ print(watch)
+		#~ print(os.path.dirname(os.path.abspath(watch)))
 	observer.start()
 	try:
 		server = HTTPServer( (host,int(port)), Handler)

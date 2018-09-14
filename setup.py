@@ -19,7 +19,7 @@ setup(
 	author_email='nah',
 	license='MIT',
 	packages=['pyweb'],
-	install_requires=['cython', 'pyyaml'],
+	install_requires=['cython', 'pyyaml', 'watchdog'],
 	zip_safe=False,
 	ext_modules = cythonize([Extension("pyweb.compiler", ["pyweb/compiler.pyx"])]),
 	entry_points = {
