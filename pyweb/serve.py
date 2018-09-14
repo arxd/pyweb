@@ -13,18 +13,22 @@ class Watchdog(FileSystemEventHandler):
 	def on_modified(self, event):
 		outdir = os.path.abspath(os.path.join('.', Handler.config['out']))
 		affected_pages = []
-		affected_module = None
+		#~ affected_modules = set()
 		for page, deps in Handler.deps.items():
 			for d in deps:
 				if d.__file__ == event.src_path:
-					affected_module = d
+					#~ affected_module = d
 					affected_pages.append(page)
 		
 		if affected_pages:
-			importlib.invalidate_caches()
-			importlib.reload(affected_module)
-			Handler.deps.update(build(affected_pages, outdir))
-			
+			for page in affected_pages:
+				for p in Handler.config['pages']:
+					if p in page.__file__:
+						break
+				filename = os.path.join(outdir, p+'.html')
+				print("Removing %s"%filename)
+				os.remove(filename)
+
 		elif event.src_path == './pyweb_config.yaml':
 			subprocess.call("pyweb-build", shell=True)
 			
@@ -57,9 +61,9 @@ class Handler(BaseHTTPRequestHandler):
 		ext = self.path[exti+1:]
 		filename = os.path.join('.', Handler.config['out'], self.path[1:])
 		
-		#~ if not os.path.isfile(filename) and self.path[1:-5] in Handler.config['pages']:
-			#~ print("REBUILD", self.path)
-			#subprocess.run('python3 setup.py build min', shell=True)
+		if not os.path.isfile(filename) and self.path[1:-5] in Handler.config['pages']:
+			print("REBUILD", self.path)
+			subprocess.run('pyweb-build %s'%self.path[1:-5], shell=True)
 			
 		if ext not in ['jpg', 'png', 'css', 'js','html','json'] or not os.path.isfile(filename):
 			self.resp(404, "text/html")
@@ -80,7 +84,11 @@ def serve():
 		print ("Must be using Python 3")
 		sys.exit(1)
 	
-	Handler.config, Handler.deps = build_all()	
+	sys.path = ['./src'] + sys.path
+	with open("pyweb_config.yaml", 'r') as config:
+		Handler.config = yaml.load(config)
+	
+	Handler.deps = build_all(Handler.config)
 	host, port = Handler.config['serve'].split(':')
 	
 	print("Serving at http://%s:%s..."%(host, port))

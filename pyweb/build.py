@@ -23,15 +23,12 @@ def build(pages, outdir):
 		#~ print("Importing %s..."%page)
 		#~ mod = importlib.import_module(page)
 		cls = getattr(page, page.__name__.upper())
-		if not issubclass(cls, HTML):
-			cls = getattr(mod, mod.__name__.upper()+"_TEST")
+		if cls.__bases__[0].__name__ != 'HTML':
+			cls = getattr(page, page.__name__.upper()+"_TEST")
 		deps[page] = _build_cls(outdir, cls)
 	return deps
 
-def build_all():
-	sys.path = ['./src'] + sys.path
-	with open("pyweb_config.yaml", 'r') as config:
-		config = yaml.load(config)
+def build_all(config):
 	outdir = os.path.join('.', config['out'])
 	
 	if os.path.isdir(outdir):
@@ -52,7 +49,14 @@ def build_all():
 	print("Importing pages %s ..."%config['pages'])
 	pages = [importlib.import_module(page) for page in config['pages']]
 	
-	return config, build(pages, outdir)
+	return build(pages, outdir)
 
 def cli_build():
-	build_all()
+	sys.path = ['./src'] + sys.path
+	with open("pyweb_config.yaml", 'r') as config:
+		config = yaml.load(config)
+	if len(sys.argv) == 2:
+		build( [importlib.import_module(page) for page in sys.argv[1:]], os.path.join('.', config['out']))
+	else:
+		build_all(config)
+	
