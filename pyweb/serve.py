@@ -61,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
 		path = self.path.split('?')[0]
 		if path == '/':
 			path = '/index.html'
-		ext = self.path.rfind('.')
+		ext = path.rfind('.')
 		if ext < 0:
 			ext = 'html'
 			path += '.html'

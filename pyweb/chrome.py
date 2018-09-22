@@ -1,4 +1,4 @@
-import subprocess, json, base64, sys
+import subprocess, json, base64
 from urllib.request import urlopen
 from tornado.websocket import websocket_connect
 from tornado.ioloop import IOLoop
@@ -6,6 +6,7 @@ from tornado.ioloop import IOLoop
 class Chrome(object):
 	def __init__(self):
 		self.cmdid = 1
+		self.events = []
 		print("Starting chrome... ",end='')
 		self.chrome_proc = subprocess.Popen(['google-chrome-stable', '--headless', '--remote-debugging-port=0'], stderr=subprocess.PIPE)
 		x = None
@@ -47,13 +48,19 @@ class Chrome(object):
 			for c in page['commands']:
 				print("%30s: %s"%(c['name'], c['description'] if 'description' in c else ''))
 	
-	def on_message(self, method, params):
-		print("MSG:%s"%method)
-	
-	def get_msg(self):
+	def get_msg(self, prefix=''):
 		msg = json.loads(IOLoop.current().run_sync(lambda : self.ws.read_message()))
 		if 'error' in msg:
 			raise Exception("Chrome Error: %r"%msg['error'])
+		self.events.append(msg)
+
+		if 'method' in msg:
+			if msg['method']=='Page.lifecycleEvent':
+				print("MSG:%s: Page.lifecycleEvent: %s"%(prefix, msg['params']['name']))
+			else:
+				print("MSG:%s: %s"%(prefix, msg['method']))
+		else:
+			print("MSG:Response %d"%msg['id'])
 		return msg
 		
 	def send(self, method, params):
@@ -62,23 +69,36 @@ class Chrome(object):
 		print("Sending: %s"%payload)
 		self.ws.write_message(payload)
 		while True:
-			msg = self.get_msg()
+			msg = self.get_msg('send')
 			if 'id' in msg and msg['id'] == self.cmdid:
 				break
-			self.on_message("send: "+msg['method'], msg['params'])
 		return msg['result']
 		
 	def __call__(self, method, **params):
 		return self.send(method, params)
-		
+	
+	def lifecycle(self, name):
+		for evt in self.events:
+			if 'method' in evt and evt['method'] == 'Page.lifecycleEvent' and evt['params']['name'] == name:
+				print("%s already fired"%name)
+				return
+		print("Wait for lifecycle %s..."%name)
+		while True:
+			msg = self.get_msg('lifecycle')
+			if msg['method'] == 'Page.lifecycleEvent' and msg['params']['name'] == name:
+				break
+	
 	def wait(self, method):
+		for evt in self.events:
+			if 'method' in evt and evt['method'] == method:
+				print("%s already fired"%method)
+				return
 		print("Wait for %s..."%method)
 		while True:
-			msg = self.get_msg()
+			msg = self.get_msg('wait')
 			if msg['method'] == method:
 				break
-			self.on_message("wait: "+msg['method'], msg['params'])
-		
+			
 	def close(self):
 		if self.chrome_proc.poll():
 			print("Already closed")
@@ -89,38 +109,56 @@ class Chrome(object):
 		print("Closed")
 		
 		
-	def html2pdf(url, filename, margin=10, size=(210, 297)):
+	def pdf(self, url, filename, margin=10, size=(210, 297)):
 		if isinstance(margin, tuple) and len(margin) == 2:
 			margin = (margin[0], margin[1], margin[0], margin[1])
 		elif not (isinstance(margin, tuple) and len(margin) == 4):
 			margin = (margin, margin, margin, margin)
-			
+		
+		#~ self('Network.enable')
 		self('Page.enable')
+		self('Page.setLifecycleEventsEnabled', enabled=True)
 		self('Page.navigate', url=url)
+		self.events = []
 		self.wait('Page.frameStoppedLoading')
+		self.lifecycle('networkIdle')
 		pdf = self('Page.printToPDF', printBackground=True, displayHeaderFooter=False,
 			paperWidth=size[0]/25.4, paperHeight=size[1]/25.4, 
 			marginTop=margin[0]/25.4, marginRight=margin[1]/25.4, marginBottom=margin[2]/25.4, marginLeft=margin[3]/25.4)
 		print("Writing %s..."%filename)
 		with open(filename, 'wb') as f:
 			f.write(base64.b64decode(pdf['data']))
+		
+		#~ while True:
+			#~ self.get_msg('end')
 
 
 def html2pdf():
+	import sys, os.path
 	try:
 		url = sys.argv[1]
+		if ':' in url:
+			if not url.endswith('/'):
+				url += '/'
+			filename = url[url.find('/')+1:].replace('/', '_')
+			if not filename:
+				filename = 'index'
+			url = 'http://'+url
+		else:
+			filename = url
+			url = 'file://'+os.path.abspath(url)
+			
+		if filename.endswith('.html'):
+			filename = filename[:-5]
+		filename += '.pdf'
 		if len(sys.argv) > 2:
 			filename = sys.argv[2]
-		else:
-			mtch = re.match(".*?/?([a-zA-Z0-9 _]*)\.html")
-			if mtch:
-				filename = mtch.group(1)
-			else:
-				filename = 'output'
-	except:
-		print("Usage: pyweb-pdf URL [OUTPUT]\n\tpyweb-pdf localhost:8080 bob.pdf\n\tpyweb-pdf products.html")
-	
+
+	except Exception as e:
+		print("Usage: pyweb-pdf URL [OUTPUT]\n\n\tpyweb-pdf localhost:8080 bob.pdf\n\tpyweb-pdf products.html")
+		raise e
+		
 	chrome = Chrome()
-	chrome.pdf(url, filename+'.pdf')
+	chrome.pdf(url, filename)
 	chrome.close()
 	
