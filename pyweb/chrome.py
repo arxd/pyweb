@@ -154,9 +154,9 @@ def html2pdf():
 		if len(sys.argv) > 2:
 			filename = sys.argv[2]
 
-	except Exception as e:
+	except:
 		print("Usage: pyweb-pdf URL [OUTPUT]\n\n\tpyweb-pdf localhost:8080 bob.pdf\n\tpyweb-pdf products.html")
-		raise e
+		sys.exit(1)
 		
 	chrome = Chrome()
 	chrome.pdf(url, filename)

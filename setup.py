@@ -27,6 +27,7 @@ setup(
 			'pyweb-build=pyweb.build:cli_build',
 			'pyweb-serve=pyweb.serve:serve',
 			'pyweb-pdf=pyweb.chrome:html2pdf',
+			'pyweb-app=pyweb.app:app_serve',
 		],
 	}
 )
