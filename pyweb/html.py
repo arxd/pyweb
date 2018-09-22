@@ -189,7 +189,7 @@ class HTML(EL):
 class CDATA(EL):
 	def __init__(self, text, **kwargs):
 		super().__init__(tag='!string!', **kwargs)
-		self.text = text
+		self.text = str(text)
 	
 	def append(self, child):
 		raise Exception("String can't have children %r"%child)

@@ -26,7 +26,7 @@ setup(
 		'console_scripts': [
 			'pyweb-build=pyweb.build:cli_build',
 			'pyweb-serve=pyweb.serve:serve',
-			
+			'pyweb-pdf=pyweb.chrome:html2pdf',
 		],
 	}
 )

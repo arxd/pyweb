@@ -27,8 +27,11 @@ class Watchdog(FileSystemEventHandler):
 						break
 				filename = os.path.join(outdir, p+'.html')
 				print("Removing %s"%filename)
-				os.remove(filename)
-
+				try:
+					os.remove(filename)
+				except:
+					pass
+					
 		elif event.src_path == './pyweb_config.yaml':
 			subprocess.call("pyweb-build", shell=True)
 			
@@ -55,19 +58,26 @@ class Handler(BaseHTTPRequestHandler):
 		self.end_headers()
 	
 	def do_GET(self):
-		if self.path == '/':
-			self.path = '/index.html'
-		exti = self.path.rfind('.')
-		ext = self.path[exti+1:]
-		filename = os.path.join('.', Handler.config['out'], self.path[1:])
+		path = self.path.split('?')[0]
+		if path == '/':
+			path = '/index.html'
+		ext = self.path.rfind('.')
+		if ext < 0:
+			ext = 'html'
+			path += '.html'
+		else:
+			ext = path[ext+1:]
+			
+		filename = os.path.join('.', Handler.config['out'], path[1:])
+		print(filename, ext, path)
 		
-		if not os.path.isfile(filename) and self.path[1:-5] in Handler.config['pages']:
-			print("REBUILD", self.path)
-			subprocess.run('pyweb-build %s'%self.path[1:-5], shell=True)
+		if not os.path.isfile(filename) and path[1:-5] in Handler.config['pages']:
+			print("REBUILD", path)
+			subprocess.run('pyweb-build %s'%path[1:-5], shell=True)
 			
 		if ext not in ['jpg', 'png', 'css', 'js','html','json'] or not os.path.isfile(filename):
 			self.resp(404, "text/html")
-			self.wfile.write(("<html><head></head><body><h1>404:%s</h1></body></html"%self.path).encode())
+			self.wfile.write(("<html><head></head><body><h1>404:%s</h1></body></html>"%path).encode())
 		else:
 			self.resp(200, {
 				'js':'application/javascript',
