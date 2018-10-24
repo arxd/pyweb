@@ -24,7 +24,8 @@ setup(
 	ext_modules = cythonize([Extension("pyweb.compiler", ["pyweb/compiler.pyx"])]),
 	entry_points = {
 		'console_scripts': [
-			'pyweb-build=pyweb.build:cli_build',
+			'pyweb-build=pyweb.build:cli_build_inline',
+			'pyweb-build-debug=pyweb.build:cli_build',
 			'pyweb-serve=pyweb.serve:serve',
 			'pyweb-pdf=pyweb.chrome:html2pdf',
 			'pyweb-app=pyweb.app:app_serve',

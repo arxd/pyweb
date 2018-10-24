@@ -4,6 +4,8 @@
 cimport compiler_c as cc
 import re, json, os.path
 from html import EL
+import http.client, urllib, base64
+from subprocess import Popen, PIPE, call
 
 cdef void callback(int objid, void *f):
 	(<object>f)(objid)
@@ -15,6 +17,63 @@ def clsname(id):
 		id //= 26
 	return (s+'aa')[:2]
 
+def file_changed(filename, data):
+	if not os.path.exists(filename):
+		print(filename, "doesn't exist")
+		return True
+	with open(filename) as inf:
+		filedata = inf.read()
+		print(data[:20], len(data), filedata[:20], len(filedata))
+		if data != filedata:
+			for i in range(len(data)):
+				if data[i] != filedata[i]:
+					break;
+			print("Different %s | %s"%(data[i-50:i+50], filedata[i-50:i+50]))
+		return data != filedata
+
+def closure_cmd(args, filenames, type='compiled_code', level="SIMPLE_OPTIMIZATIONS"):
+	code = ""
+	#~ for x in args:
+		#~ print(x[0])
+		#~ print('')
+		#~ code += '\n'+x[1]
+	
+	print("Closure... %s"%(type))
+	if type != 'compiled_code':
+		return ""
+	closure_jar = "/home/hegemon/.bin/closure-compiler-v20181008.jar"
+	cmd = ['java','-jar', closure_jar, '--language_in','ECMASCRIPT6', '--js_output_file','/tmp/out.js']
+	for f in filenames:
+		cmd.append('--js')
+		cmd.append(os.path.abspath(f))
+	print(cmd)
+	call(cmd)#, stdout=PIPE, stderr=PIPE)
+	#(out,err) = cc.communicate()
+	#print("--------out---------")
+	#print(out)
+	#print("--------ERRR---------")
+	#print(err)
+	with open('/tmp/out.js', encoding="utf8") as inf:
+		return inf.read()
+	#return out.decode('utf8')
+	
+def closure_http(args, filenames, type='compiled_code', level="SIMPLE_OPTIMIZATIONS"):
+	print("Closure... %s"%(type))
+	conn = http.client.HTTPSConnection('closure-compiler.appspot.com')
+	conn.connect()
+	headers = { "Content-type": "application/x-www-form-urlencoded" }
+	conn.request("POST", '/compile', urllib.parse.urlencode(args+ [
+			('compilation_level', level),
+			('output_format', 'text'),
+			('language', 'ECMASCRIPT6'),
+			('formatting', 'pretty_print' if level == 'SIMPLE_OPTIMIZATIONS' else 'print_input_delimiter'),
+			('output_info',type),
+		]), headers)
+	resp = conn.getresponse()
+	if resp.status != 200:
+		raise Exception("Server Error: %d"%resp.status)
+	resp  = resp.read().decode("utf-8")
+	return resp
 
 class Compiler:
 	def __init__(self):
@@ -197,36 +256,67 @@ class Compiler:
 				fout += "import {%s} from './%s'\n"%(','.join(impts[impt]), impt)
 			return fout
 		
+		def get_rel_path(objA, objB):
+			apath = []
+			while (objA):
+				apath.append(objA)
+				objA = objA.parent
+			path = []
+			while objB not in apath:
+				par = objB.parent
+				path.append(par.children.index(objB))
+				objB = par
+			path += [-1]*apath.index(objB)
+			path.reverse()
+			return path
+		
+		def jsval_to_str(obj, val):
+			class Encoder(json.JSONEncoder):
+				def default(self, o):
+					if isinstance(o, EL):
+						return {"__el__":get_rel_path(obj, o)}
+					return json.JSONEncoder.default(self, o)
+			val = json.dumps(val, cls=Encoder)
+			return base64.b64encode(val.encode('utf8')).decode('ascii')
+		
+		def get_jsvars(cls):
+			jvars = {}
+			for o in modules[cls._mod][cls]:
+				for jvar in [x[2:] for x in o.__dict__ if x.startswith('j_')]:
+					jval = jsval_to_str(o, o.__dict__['j_'+jvar])
+					jvars.setdefault(jvar, {})
+					jvars[jvar].setdefault(jval, set())
+					jvars[jvar][jval].add(o)
+			return jvars
+					
+		
 		def write_constructor(cls):
 			fout = ""
 			if cls == EL:
 				return  'constructor(el){this.el = el;}\n'
-				
-			def getval(val):
-				if isinstance(val, str):
-					return '"%s"'%(re.sub('"', '\\"', val))
-				elif isinstance(val, tuple):
-					return 'this.getachild(%r)'%list(val)#this.el' + ''.join(['.children[%d]'%x for x in val]) 
-				else:
-					return str(val)
 					
 			fout += 'constructor(el) {\n'
 			fout += '  super(el);\n'
-			for jsvar in cls._jsvars:
-				#~ print("%s: %r\n"%(jsvar, cls._jsvars[jsvar]))
-				if len(cls._jsvars[jsvar]) == 1:
-					fout += "  this.%s = %s;\n"%(jsvar[2:], getval(cls._jsvars[jsvar].popitem()[0]))
+			class_vars = get_jsvars(cls)
+			for jsvar, jsvalsd in class_vars.items():
+				if len(jsvalsd) == 1:
+					fout += '  this.%s = this.decode_data_value('%jsvar
+					fout += '"' + jsvalsd.popitem()[0] + '");\n'
 				else:
 					com = None
-					for v in cls._jsvars[jsvar]:
-						if not com or len(cls._jsvars[jsvar][v]) > len(cls._jsvars[jsvar][com]):
-							com = v
-					fout += "  this.%s = this.el.hasAttribute('data-%s')? JSON.parse(this.el.getAttribute('data-%s')): %s;\n"%(jsvar[2:], jsvar, jsvar, getval(com))
-					for v in cls._jsvars[jsvar]:
-						if v == com:
+					for val, objs in jsvalsd.items():
+						if not com or len(objs)*len(val) > len(com) * len(jsvalsd[com]):
+							com = val
+					fout += "  this.%s = this.decode_data_value("%jsvar
+					fout += " this.el.hasAttribute('data-j%s')? "%jsvar
+					fout += " this.el.getAttribute('data-j%s')"%jsvar
+					fout += '  : "'+com+'");\n'
+			
+					for val, objs in jsvalsd.items():
+						if val == com:
 							continue
-						for obj in cls._jsvars[jsvar][v]:
-							obj.attrs['data-'+jsvar] = json.dumps(v).replace('"', '&quot;')
+						for obj in objs:
+							obj.attrs['data-j%s'%jsvar] = val
 							
 			if 'constructor' in cls._extra:
 				fout += cls._extra['constructor']
@@ -265,16 +355,41 @@ class Compiler:
 		return jsdata
 		
 		
-	def js_compile(self, outdir):
+	def js_compile(self, outdir, compile=False):
 		jsdata = self.js_build()
-		if outdir:
-			for f in jsdata[:-1]:
-				filename = os.path.join(outdir, f[0].split(':')[1])
-				print("Writing %s..."%filename)
-				with open(filename, 'w') as fout:
+		filenames = []
+		must_build = False
+		for f in jsdata:
+			filenames.append(str(os.path.join(outdir, f[0].split(':')[1])))
+			changed = file_changed(filenames[-1], f[1])
+			must_build |= changed
+			if changed:
+				print("Writing %s..."%filenames[-1])
+				with open(filenames[-1], 'w') as fout:
 					fout.write(f[1])
+				
+		if not compile:
 			return '<script type="module">' + jsdata[-1][1] + '</script>'
-		return ""
+		else:
+			if must_build:
+				if call(['which', 'closure-compiler']):
+					print("Closure not found, using HTTP")
+					closure = closure_http
+				else:
+					closure = closure_cmd
+				
+				#closure = closure_http
+				rep = closure(jsdata, filenames, type="errors")
+				if rep.strip():
+					print(rep)
+					raise Exception("Bad JS")
+				rep = closure(jsdata, filenames, type="warnings")
+				level = 'SIMPLE_OPTIMIZATIONS'
+				rep = closure(jsdata, filenames, type="compiled_code", level=level)
+			else:
+				with open('/tmp/out.js') as inf:
+					rep = inf.read()
+			return '<script>'+rep+'</script>'
 	
 	def get_py_deps(self):
 		return self.modules

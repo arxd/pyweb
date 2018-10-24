@@ -134,12 +134,15 @@ class Styles(dict):
 			v = v.strip()
 			if not v:
 				continue
+			
 			m = re(r'([$]?[a-zA-Z-]+)\s*:\s*(.*)').match(v)
 			if not m:
 				print("%s: Bad Name >>%s<<\n%s"%(where, v,'\n'.join(lines)))
 				raise Exception()
 			try:
 				self[m.group(1)] = Value(self, m.group(2))
+				#print("%s : %s == %s"%(where, m.group(1), self[m.group(1)] ))
+				#print(self)
 			except Exception as e:
 				print("%s: Bad Value >>%s<<\n%s"%(where, m.group(2),'\n'.join(lines)))
 				raise e

@@ -35,6 +35,8 @@ class MetaElement(type):
 		self.style = {}
 		self.styles = Styles(self)
 		self.classes = set()
+		self.static_classes = []
+		self.cid = 0
 		self._classes = []
 		self.space_after = None
 		self.inline_style = ''
@@ -42,40 +44,50 @@ class MetaElement(type):
 		if g_element_stack:
 			g_element_stack[-1].append(self)
 		g_element_stack.append(self)
-		self.__init__(*args, **kwargs)
-		for p in filter(lambda x: x.startswith('j_'), self.__dict__):
-			v = self.__dict__[p]
-			if isinstance(v, EL):
-				def find_child(el):
-					for ci, child in enumerate(el.children):
-						if child == v:
-							return [ci]
-						child = find_child(child)
-						if child:
-							return [ci] + child
-					return []
-				v = tuple(find_child(self))
-			elif not (isinstance(v, int) or isinstance(v, str)):
-				raise Exception("bad value '%s':%s"%(v, type(v)))
-				
-			cls._jsvars.setdefault(p, {})
-			cls._jsvars[p].setdefault(v, set())
-			cls._jsvars[p][v].add(self)
-		
+		self.__init__(*args, **kwargs)		
 		g_element_stack.pop()
 		return self
 
 
 class EL(metaclass=MetaElement):
 	"""#== methods ==#
-		getachild(path) {
-			let el = this.el;
-			for(let p in path)
-				el = el.children[path[p]];
+	decode_data_value(val) {
+		let rootel = this.el;
+		function doelement(path) {
+			let el = rootel;
+			for(let p = 0; p < path.length; ++p)
+				el = (path[p] < 0)? el.parentElement: el.children[path[p]];
 			return el;
 		}
+		
+		function dodict(v) {
+			let out = {};
+			for (let i in v)
+				out[i] = delve_val(v[i])
+			return out;
+		}
+		
+		function doarray(v) {
+			let out = [];
+			for (let i =0; i < v.length; ++i)
+				out.push(delve_val(v[i]));
+			return out;
+		}
+		
+		function delve_val(val) {
+			if (Array.isArray(val))
+				return doarray(val);
+			else if (typeof val == 'object' && val.__el__)
+				return doelement(val.__el__);
+			else if (typeof val == 'object')
+				return dodict(val);
+			return val;
+		}
+		
+		return delve_val(JSON.parse(atob(val)));
+	}
 	"""
-	def __init__(self, tag="unk!", id="", c=[], space_after=None, text=None, **kwargs):
+	def __init__(self, tag="unk!", id="", c=[], space_after=False, text=None, **kwargs):
 		self.tag = tag
 		self.id = id
 		self.space_after = space_after
@@ -103,6 +115,14 @@ class EL(metaclass=MetaElement):
 			
 		for child in c:
 			self.append(child)
+	
+	def __enter__(self):
+		global g_element_stack
+		g_element_stack.append(self)
+		
+	def __exit__(self, *args):
+		global g_element_stack
+		g_element_stack.pop()
 		
 	def append(self, child):
 		if child.parent:
@@ -119,13 +139,13 @@ class EL(metaclass=MetaElement):
 			s = self.start_tag(debug)
 			prev_child = None
 			for child in self.children:
-				if debug and (not prev_child or prev_child.space_after != False):
-					s += '\n'+'  '*(depth+1 if debug else 0)
-				elif debug and prev_child.space_after == False:
-					s += '<!--\n'+'  '*(depth-1 if debug else 0) +' -->'
+				if prev_child and prev_child.space_after:
+					s += ' '
+				if debug:
+					s += '<!--\n'+'  '*(depth-1) +' -->'
 				s += child.render(debug, depth+1)
 				prev_child = child
-			s += ('\n' + '  '*depth if debug else '')
+			#s += ('\n' + '  '*depth if debug else '')
 		s += "</%s>"%self.tag + (' ' if self.space_after else '')
 		return s
 		

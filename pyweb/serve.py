@@ -2,7 +2,7 @@ import importlib,  traceback, os, os.path, json, subprocess, re,sys,glob, yaml, 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
-from .build import build_all, build
+from .build import build_all
 
 #~ G_INDEX_MODS = []
 #~ G_INDEX_MOD = None
@@ -98,7 +98,7 @@ def serve():
 	with open("pyweb_config.yaml", 'r') as config:
 		Handler.config = yaml.load(config)
 	
-	Handler.deps = build_all(Handler.config)
+	Handler.deps = build_all(Handler.config, True)
 	host, port = Handler.config['serve'].split(':')
 	
 	print("Serving at http://%s:%s..."%(host, port))
