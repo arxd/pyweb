@@ -362,6 +362,7 @@ class Compiler:
 		for f in jsdata:
 			filenames.append(str(os.path.join(outdir, f[0].split(':')[1])))
 			changed = file_changed(filenames[-1], f[1])
+			changed = True
 			must_build |= changed
 			if changed:
 				print("Writing %s..."%filenames[-1])
