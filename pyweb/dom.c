@@ -53,7 +53,7 @@ void query_dump(int qid);
 
 #if __INCLUDE_LEVEL__ == 0
 
-#include <malloc.h>
+//#include <malloc.h>
 #include <stdlib.h>
 
 static Style* g_sty = 0;
@@ -321,18 +321,21 @@ void dom_query_dump()
 	//~ dom_style_dump();
 }
 
-void dom_style_dump()
-{
-	int nused = 0;
-	int *used = alloca(sizeof(int)*g_nq);
-	
-	int is_used(int qid) {
+int nused = 0;
+int *used = 0;
+int is_used(int qid) {
 		for (int u=0; u < nused; ++u) {
 			if (used[u] == qid)
 				return 1;
 		}
 		return 0;
 	}
+void dom_style_dump()
+{
+	used = alloca(sizeof(int)*g_nq);
+	
+	
+	
 	
 	for (int i = 1; i <= g_nsty; ++i) {
 		for(int q=0; q < g_sty[i].nq; ++q) {

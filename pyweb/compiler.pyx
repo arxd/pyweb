@@ -41,7 +41,7 @@ def closure_cmd(args, filenames, type='compiled_code', level="SIMPLE_OPTIMIZATIO
 	print("Closure... %s"%(type))
 	if type != 'compiled_code':
 		return ""
-	closure_jar = "/home/hegemon/.bin/closure-compiler-v20181008.jar"
+	closure_jar = os.getenv('CLOSURE_COMPILER_JAR')
 	cmd = ['java','-jar', closure_jar, '--language_in','ECMASCRIPT6', '--js_output_file','/tmp/out.js']
 	for f in filenames:
 		cmd.append('--js')
@@ -373,7 +373,8 @@ class Compiler:
 			return '<script type="module">' + jsdata[-1][1] + '</script>'
 		else:
 			if must_build:
-				if call(['which', 'closure-compiler']):
+				if not os.getenv("CLOSURE_COMPILER_JAR"):
+				#call(['which', 'closure-compiler']):
 					print("Closure not found, using HTTP")
 					closure = closure_http
 				else:

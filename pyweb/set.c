@@ -35,8 +35,10 @@ extern int g_len;
 
 #if __INCLUDE_LEVEL__ == 0
 
-#include <malloc.h>
+//#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 int g_len; // number of 64bit words used to hold the objects
 static int g_nobjs; // number of objetcs in the set

@@ -26,7 +26,8 @@ extern int obj_num;
 
 #if __INCLUDE_LEVEL__ == 0
 
-#include <malloc.h>
+//#include <malloc.h>
+#include <stdlib.h>
 
 int obj_num = 0;
 Object** g_objs = 0;
